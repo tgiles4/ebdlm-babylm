@@ -1,0 +1,29 @@
+[project]
+name = "ebdlm-babylm"
+version = "0.1.0"
+description = "Energy-based diffusion language models for the BabyLM benchmark"
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "torch>=2.5.0",
+    "transformers>=4.48.0",
+    "tokenizers>=0.21.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.8",
+]
+
+[tool.uv]
+package = false
+
+# CUDA 12.4 wheels for Linux (SLURM) and Windows with NVIDIA GPUs.
+# For CPU-only: change the URL below to https://download.pytorch.org/whl/cpu
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu124" }
