@@ -29,12 +29,24 @@ def modernbert_config_from_cfg(
         pad_token_id=int(tokenizer.pad_token_id),
         bos_token_id=int(tokenizer.bos_token_id),
         eos_token_id=int(tokenizer.eos_token_id),
+        mask_token_id=int(tokenizer.mask_token_id),
     )
+
+
+def _attn_implementation() -> str:
+    """Use Flash Attention 2 when installed; otherwise SDPA."""
+    try:
+        import flash_attn  # noqa: F401
+    except ImportError:
+        return "sdpa"
+    return "flash_attention_2"
 
 
 def create_model(config: ModernBertConfig) -> ModernBertForMaskedLM:
     """Randomly initialize ``ModernBertForMaskedLM`` from config."""
-    model = ModernBertForMaskedLM(config)
+    attn = _attn_implementation()
+    logger.info("Using attention implementation: %s", attn)
+    model = ModernBertForMaskedLM(config, attn_implementation=attn)
     param_count = model.num_parameters()
     logger.info(
         "Initialized ModernBertForMaskedLM with %s parameters", f"{param_count:,}"
