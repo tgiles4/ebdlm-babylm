@@ -1,7 +1,5 @@
 """Build randomly initialized ModernBERT masked-LM models from Hydra config."""
 
-from __future__ import annotations
-
 import logging
 
 from omegaconf import DictConfig
