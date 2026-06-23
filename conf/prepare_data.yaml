@@ -1,0 +1,24 @@
+defaults:
+  - dataset: strict
+  - _self_
+
+hydra:
+  job:
+    chdir: false
+
+root: ${hydra:runtime.cwd}
+
+paths:
+  raw: ${root}/data/${dataset.slug}/raw
+  prepped: ${root}/data/${dataset.slug}/prepped
+  packed: ${root}/data/${dataset.slug}/packed
+  pretokenized: ${root}/pretokenized/${dataset.slug}
+  tokenizer: ${root}/tokenizers/tokenizer_${dataset.slug}.json
+
+context_length: 512
+num_workers: 16
+batch_size: 1000
+
+tokenizer:
+  vocab_size: 16384
+  min_frequency: 2

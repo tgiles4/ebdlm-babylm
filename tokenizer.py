@@ -1,44 +1,36 @@
-import argparse
 from pathlib import Path
 
+import hydra
+from omegaconf import DictConfig
 from tokenizers import Tokenizer, processors
-from tokenizers.models import BPE
-from tokenizers.trainers import BpeTrainer
-from tokenizers.pre_tokenizers import ByteLevel
 from tokenizers.decoders import ByteLevel as ByteLevelDecoder
+from tokenizers.models import BPE
+from tokenizers.pre_tokenizers import ByteLevel
+from tokenizers.trainers import BpeTrainer
 
-from huggingface_hub import snapshot_download
+from utils import BabyLMSize, download_babylm_raw
 
 
 def train_tokenizer(
-    data_dir: Path,
-    output_path: Path,
-    size: str,
-    vocab_size: int = 16384,
-    min_frequency: int = 2,
+    data_path: Path,
+    output_file: Path,
+    size: BabyLMSize,
+    vocab_size: int,
+    min_frequency: int,
     show_progress: bool = True,
 ) -> None:
     """
     Trains a BPE tokenizer for diffusion models.
 
-    data_dir: Path to the directory containing the text files to train the tokenizer on.
-    output_path: Path to the directory to save the trained tokenizer.
+    data_path: Directory for raw BabyLM train files.
+    output_file: Path to save the trained tokenizer JSON.
+    size: BabyLM track used for download and naming.
     vocab_size: The size of the vocabulary.
     min_frequency: The minimum frequency of a token to be included in the vocabulary.
     show_progress: Whether to show a progress bar during training.
     """
-    root = data_dir / size.lower()
-
-    if not root.exists():
-        snapshot_download(
-            f"BabyLM-community/BabyLM-2026-{size}",
-            repo_type="dataset",
-            local_dir=data_dir / size.lower(),
-            local_dir_use_symlinks=False,
-        )
-
-
-    train_files = [str(p) for p in root.glob("*.train.txt")]
+    raw_dir = download_babylm_raw(data_path, size)
+    train_files = [str(p) for p in raw_dir.glob("*.train.txt")]
 
     special_tokens = [
         "<pad>",
@@ -66,28 +58,20 @@ def train_tokenizer(
         ("<eos>", tokenizer.token_to_id("<eos>")),
         ("<bos>", tokenizer.token_to_id("<bos>")),
     )
-    
-    output_path.mkdir(parents=True, exist_ok=True)
-    tokenizer.save(str(output_path / f"tokenizer_{size.lower()}.json"))
+
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    tokenizer.save(str(output_file))
 
 
-def main():
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument("--data_dir", type=Path, required=True)
-    parser.add_argument("--size", type=str, choices=["Strict-Small", "Strict"], default="Strict")
-    parser.add_argument("--output_path", type=Path, required=True)
-    parser.add_argument("--vocab_size", type=int, default=16384)
-    parser.add_argument("--min_frequency", type=int, default=2)
-
-    args = parser.parse_args()
-
+@hydra.main(version_base=None, config_path="conf", config_name="tokenizer")
+def main(cfg: DictConfig) -> None:
+    """Train a BPE tokenizer from Hydra config."""
     train_tokenizer(
-        data_dir=args.data_dir,
-        output_path=args.output_path,
-        size=args.size,
-        vocab_size=args.vocab_size,
-        min_frequency=args.min_frequency,
+        data_path=Path(cfg.paths.raw),
+        output_file=Path(cfg.paths.tokenizer),
+        size=BabyLMSize(cfg.dataset.size),
+        vocab_size=cfg.vocab_size,
+        min_frequency=cfg.min_frequency,
     )
 
 
