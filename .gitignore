@@ -223,4 +223,7 @@ __marimo__/
 
 # Project artifacts
 tokenizers/
+pretokenized/
 data/
+outputs/
+overlong_lines.txt
