@@ -1,5 +1,6 @@
 defaults:
   - dataset: strict
+  - model: base
   - _self_
 
 hydra:
@@ -8,6 +9,9 @@ hydra:
 
 root: ${hydra:runtime.cwd}
 
+context_length: 512
+vocab_size: 16384
+
 paths:
   raw: ${root}/data/${dataset.slug}/raw
   prepped: ${root}/data/${dataset.slug}/prepped
@@ -15,10 +19,8 @@ paths:
   pretokenized: ${root}/pretokenized/${dataset.slug}
   tokenizer: ${root}/tokenizers/tokenizer_${dataset.slug}.json
 
-context_length: 512
 num_workers: 16
 batch_size: 1000
 
 tokenizer:
-  vocab_size: 16384
   min_frequency: 2

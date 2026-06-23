@@ -11,25 +11,10 @@ from omegaconf import DictConfig
 from transformers import PreTrainedTokenizerFast
 
 from tokenizer import train_tokenizer
-from utils import BabyLMSize, download_babylm_raw
+from utils import BabyLMSize, download_babylm_raw, get_tokenizer
 
 # Joins packed sub-lines in packed text files (one physical line per example).
 FILE_PACK_JOIN = "\x1e"
-
-
-def get_tokenizer(tokenizer_path: Path) -> PreTrainedTokenizerFast:
-    """
-    Wraps the tokenizer in a PreTrainedTokenizerFast object to access special tokens
-    and tokenizer methods.
-    """
-    return PreTrainedTokenizerFast(
-        tokenizer_file=str(tokenizer_path),
-        unk_token="<unk>",
-        bos_token="<bos>",
-        eos_token="<eos>",
-        pad_token="<pad>",
-        mask_token="<mask>",
-    )
 
 
 def count_tokens(text: str, tokenizer: PreTrainedTokenizerFast) -> int:
@@ -121,8 +106,12 @@ def prep_corpus(raw_dir: Path, prepped_dir: Path) -> None:
 
         with (
             path.open(encoding="utf-8") as src,
-            (prepped_dir / "simple_wiki_articles.train.txt").open("w", encoding="utf-8") as articles,
-            (prepped_dir / "simple_wiki_conversations.train.txt").open("w", encoding="utf-8") as conversations,
+            (prepped_dir / "simple_wiki_articles.train.txt").open(
+                "w", encoding="utf-8"
+            ) as articles,
+            (prepped_dir / "simple_wiki_conversations.train.txt").open(
+                "w", encoding="utf-8"
+            ) as conversations,
         ):
             out = articles
             for line in src:
@@ -160,7 +149,10 @@ def pack_file(
         outf.write(packed + "\n")
         chunk_lines = []
 
-    with input_path.open(encoding="utf-8") as inf, output_path.open("w", encoding="utf-8") as outf:
+    with (
+        input_path.open(encoding="utf-8") as inf,
+        output_path.open("w", encoding="utf-8") as outf,
+    ):
         while True:
             if pending:
                 line = pending.popleft()
@@ -213,12 +205,22 @@ def pack_corpus(
 
     if num_workers <= 1 or len(input_paths) <= 1:
         file_stats = [
-            (input_path.name, pack_file(input_path, output_dir / input_path.name, tokenizer_path, context_length))
+            (
+                input_path.name,
+                pack_file(
+                    input_path,
+                    output_dir / input_path.name,
+                    tokenizer_path,
+                    context_length,
+                ),
+            )
             for input_path in input_paths
         ]
     else:
         file_stats = []
-        with ProcessPoolExecutor(max_workers=min(num_workers, len(input_paths))) as executor:
+        with ProcessPoolExecutor(
+            max_workers=min(num_workers, len(input_paths))
+        ) as executor:
             future_to_name = {
                 executor.submit(
                     pack_file,
@@ -267,7 +269,8 @@ def pretokenize_data(
     """Pretokenize packed text files to a HuggingFace dataset on disk."""
     train_files = sorted(dataset_dir.glob("*.txt"))
     datasets = [
-        load_dataset("text", data_files=str(path), split="train") for path in train_files
+        load_dataset("text", data_files=str(path), split="train")
+        for path in train_files
     ]
 
     process_function = partial(
@@ -292,7 +295,7 @@ def pretokenize_data(
     packed_dataset.save_to_disk(save_dir)
 
 
-@hydra.main(version_base=None, config_path="conf", config_name="prepare_data")
+@hydra.main(version_base=None, config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     """Download raw data, ensure tokenizer, prep, pack, then pretokenize."""
     size = BabyLMSize(cfg.dataset.size)
@@ -309,7 +312,7 @@ def main(cfg: DictConfig) -> None:
             data_path=raw_dir,
             output_file=tokenizer_path,
             size=size,
-            vocab_size=cfg.tokenizer.vocab_size,
+            vocab_size=cfg.vocab_size,
             min_frequency=cfg.tokenizer.min_frequency,
         )
 
