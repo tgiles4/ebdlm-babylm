@@ -1,0 +1,6 @@
+# @package model
+tag: base
+num_hidden_layers: 12
+hidden_size: 768
+num_attention_heads: 12
+intermediate_size: 1152

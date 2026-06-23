@@ -63,7 +63,7 @@ def train_tokenizer(
     tokenizer.save(str(output_file))
 
 
-@hydra.main(version_base=None, config_path="conf", config_name="tokenizer")
+@hydra.main(version_base=None, config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     """Train a BPE tokenizer from Hydra config."""
     train_tokenizer(
@@ -71,7 +71,7 @@ def main(cfg: DictConfig) -> None:
         output_file=Path(cfg.paths.tokenizer),
         size=BabyLMSize(cfg.dataset.size),
         vocab_size=cfg.vocab_size,
-        min_frequency=cfg.min_frequency,
+        min_frequency=cfg.tokenizer.min_frequency,
     )
 
 

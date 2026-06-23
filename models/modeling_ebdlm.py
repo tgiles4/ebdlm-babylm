@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Literal
 
 import torch
 import torch.nn as nn
 from torch import Tensor
-from transformers import PreTrainedModel
+from transformers import ModernBertConfig, PreTrainedModel
 from transformers.modeling_outputs import ModelOutput
-
-from .configuration_ebdlm import DiffusionConfig, EbdlmConfig, EnergyDiffusionConfig
 
 RemaskingStrategy = Literal["low_confidence", "random", "energy_gradient"]
 
@@ -42,12 +40,14 @@ class EnergyHead(nn.Module):
         LayerNorm → Linear(d,d) → GELU → Linear(d,d) → mean_pool → Linear(d,d/4) → GELU → Linear(d/4,1)
     """
 
-    def __init__(self, config: EbdlmConfig):
+    def __init__(self, config: ModernBertConfig):
         super().__init__()
         self.config = config
         # TODO: LayerNorm → Linear → GELU → Linear → pool → Linear → GELU → Linear
 
-    def forward(self, hidden_states: Tensor, attention_mask: Tensor | None = None) -> Tensor:
+    def forward(
+        self, hidden_states: Tensor, attention_mask: Tensor | None = None
+    ) -> Tensor:
         """Return per-batch scalar energy ``E(x)`` of shape ``(batch,)``."""
         raise NotImplementedError
 
@@ -62,11 +62,11 @@ class DiffusionModel(PreTrainedModel):
     ``inference()`` and is never called from the pretrain script.
     """
 
-    config_class = DiffusionConfig
+    config_class = ModernBertConfig
     base_model_prefix = "model"
     supports_gradient_checkpointing = True
 
-    def __init__(self, config: DiffusionConfig):
+    def __init__(self, config: ModernBertConfig):
         super().__init__(config)
         # TODO: self.model (ModernBertModel) + self.lm_head; init from ModernBERT-base.
         self.post_init()
@@ -103,7 +103,7 @@ class DiffusionModel(PreTrainedModel):
     def from_modernbert_pretrained(
         cls,
         pretrained_name_or_path: str = "answerdotai/ModernBERT-base",
-        config: DiffusionConfig | None = None,
+        config: ModernBertConfig | None = None,
         **kwargs,
     ) -> DiffusionModel:
         """Init backbone weights from a ModernBERT checkpoint (+ resize vocab if needed)."""
@@ -245,9 +245,9 @@ class EnergyDiffusionModel(DiffusionModel):
     next timestep. The energy head is optional at runtime via ``remasking=``.
     """
 
-    config_class = EnergyDiffusionConfig
+    config_class = ModernBertConfig
 
-    def __init__(self, config: EnergyDiffusionConfig):
+    def __init__(self, config: ModernBertConfig):
         super().__init__(config)
         self.energy_head = EnergyHead(config)
         self.post_init()
@@ -375,7 +375,7 @@ class EnergyDiffusionModel(DiffusionModel):
     def from_diffusion_checkpoint(
         cls,
         diffusion_model: DiffusionModel | str,
-        config: EnergyDiffusionConfig | None = None,
+        config: ModernBertConfig | None = None,
         **kwargs,
     ) -> EnergyDiffusionModel:
         """Attach a fresh energy head to a phase-1 diffusion checkpoint."""

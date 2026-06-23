@@ -2,6 +2,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from huggingface_hub import snapshot_download
+from transformers import PreTrainedTokenizerFast
 
 
 class BabyLMSize(StrEnum):
@@ -9,6 +10,18 @@ class BabyLMSize(StrEnum):
 
     STRICT = "Strict"
     STRICT_SMALL = "Strict-Small"
+
+
+def get_tokenizer(tokenizer_path: Path) -> PreTrainedTokenizerFast:
+    """Load the trained BPE tokenizer with diffusion special tokens."""
+    return PreTrainedTokenizerFast(
+        tokenizer_file=str(tokenizer_path),
+        unk_token="<unk>",
+        bos_token="<bos>",
+        eos_token="<eos>",
+        pad_token="<pad>",
+        mask_token="<mask>",
+    )
 
 
 def download_babylm_raw(path: Path, size: BabyLMSize) -> Path:
