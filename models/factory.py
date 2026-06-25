@@ -28,6 +28,8 @@ def modernbert_config_from_cfg(
         bos_token_id=int(tokenizer.bos_token_id),
         eos_token_id=int(tokenizer.eos_token_id),
         mask_token_id=int(tokenizer.mask_token_id),
+        cls_token_id=None,
+        sep_token_id=None,
     )
 
 
