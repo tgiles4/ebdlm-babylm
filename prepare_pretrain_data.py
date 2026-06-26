@@ -11,7 +11,7 @@ from omegaconf import DictConfig
 from transformers import PreTrainedTokenizerFast
 
 from tokenizer import train_tokenizer
-from utils import BabyLMSize, download_babylm_raw, get_tokenizer
+from utils import BabyLMSize, count_whitespace_words, download_babylm_raw, get_tokenizer
 
 # Joins packed sub-lines in packed text files (one physical line per example).
 FILE_PACK_JOIN = "\x1e"
@@ -83,8 +83,8 @@ def tokenize_batch(
     examples: dict[str, list[str]],
     tokenizer_path: Path,
     context_length: int,
-) -> dict[str, list[list[int]]]:
-    """Tokenize a batch of packed examples."""
+) -> dict[str, list[list[int]] | list[int]]:
+    """Tokenize a batch of packed examples and count whitespace-separated words."""
     tokenizer = get_tokenizer(tokenizer_path)
     texts = [normalize_text_line(line.rstrip("\n")) for line in examples["text"]]
     encoded = tokenizer(
@@ -93,7 +93,8 @@ def tokenize_batch(
         padding="max_length",
         max_length=context_length,
     )
-    return {"input_ids": encoded["input_ids"]}
+    word_counts = [count_whitespace_words(text) for text in texts]
+    return {"input_ids": encoded["input_ids"], "word_count": word_counts}
 
 
 def prep_corpus(raw_dir: Path, prepped_dir: Path) -> None:

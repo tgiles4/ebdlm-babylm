@@ -1,9 +1,5 @@
-"""Unconditional reverse-diffusion sampling for WandB sample logging.
-
-Ports the core loop from the reference ``inference.py`` (unconditional path
-only — no chat template or prompt pinning). See
-``docs/context/llada_cursor_context.md`` §§7–8 and 14.4 for the reverse
-process and remasking strategies.
+"""
+Unconditional reverse-diffusion sampling for WandB sample logging.
 """
 
 from typing import Literal
@@ -27,32 +23,32 @@ def unconditional_generate(
 ) -> torch.Tensor:
     """Generate text from an all-mask sequence via reverse masked diffusion.
 
-    Starts with ``x_1 = [M, ..., M]`` and walks timesteps from ``t=1`` down to
-    ``0``. At each step the bidirectional mask predictor fills currently masked
-    positions, then a remasking rule sets some positions back to ``M`` so the
-    mask ratio tracks the next time ``s``.
+    Starts with x_1 = [M, ..., M] and walks timesteps from t=1 down to 0. At
+    each step the bidirectional mask predictor fills currently masked positions,
+    then a remasking rule sets some positions back to M so the mask ratio tracks
+    the next time s.
 
-    Remasking modes (faithful to reference ``inference.py`` for v1):
+    Remasking modes (faithful to reference inference.py for v1):
 
-    * ``"random"`` — among positions masked at this step, remask each with
-      probability ``s / t`` (§8.1).
-    * ``"low_confidence"`` — remask the ``floor((s/t) * n_masked)`` lowest-
-      confidence predicted tokens (§8.2; reference uses ``int((s/t)*mask.sum())``
-      rather than ``floor(L * (1-s))``).
+    * "random" — among positions masked at this step, remask each with
+      probability s / t (§8.1).
+    * "low_confidence" — remask the floor((s/t) * n_masked) lowest-confidence
+      predicted tokens (§8.2; reference uses int((s/t)*mask.sum()) rather than
+      floor(L * (1-s))).
 
     Args:
         model: Bidirectional mask predictor in eval mode.
-        seq_len: Fixed generation length ``L``.
-        mask_token_id: Vocabulary id for the mask token ``M``.
-        num_steps: Number of reverse-diffusion steps ``N``.
-        remasking: ``"random"`` or ``"low_confidence"``.
+        seq_len: Fixed generation length L.
+        mask_token_id: Vocabulary id for the mask token M.
+        num_steps: Number of reverse-diffusion steps N.
+        remasking: "random" or "low_confidence".
         batch_size: Number of independent samples to generate in parallel.
-        greedy: If True, take ``argmax`` at masked positions; otherwise
-            ``multinomial`` sample (reference inference default).
+        greedy: If True, take argmax at masked positions; otherwise multinomial
+            sample (reference inference default).
 
     Returns:
-        Generated token ids ``[batch_size, seq_len]``. Decode with
-        ``tokenizer.batch_decode(..., skip_special_tokens=True)``.
+        Generated token ids [batch_size, seq_len]. Decode with
+        tokenizer.batch_decode(..., skip_special_tokens=True).
     """
     device = next(model.parameters()).device
     input_ids = torch.full(
@@ -85,7 +81,7 @@ def _fill_masked_positions(
     *,
     greedy: bool,
 ) -> torch.Tensor:
-    """Write predicted tokens at positions where ``mask`` is True."""
+    """Write predicted tokens at positions where mask is True."""
     if greedy:
         predicted = logits.argmax(dim=-1)
         return torch.where(mask, predicted, input_ids)
@@ -123,7 +119,7 @@ def _random_remask(
     t: float,
     s: float,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Remask a random subset of currently masked positions with probability ``s/t``."""
+    """Remask a random subset of currently masked positions with probability s/t."""
     ratio = s / t if t > 0 else 0.0
     remask = (torch.rand_like(mask, dtype=torch.float) < ratio) & mask
     updated_ids = input_ids.masked_fill(remask, mask_token_id)

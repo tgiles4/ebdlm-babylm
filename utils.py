@@ -12,6 +12,14 @@ class BabyLMSize(StrEnum):
     STRICT_SMALL = "Strict-Small"
 
 
+def count_whitespace_words(text: str) -> int:
+    """Return BabyLM whitespace-separated word count (repeated exposures count)."""
+    text = text.strip()
+    if not text:
+        return 0
+    return len(text.split())
+
+
 def get_tokenizer(tokenizer_path: Path) -> PreTrainedTokenizerFast:
     """Load the trained BPE tokenizer with diffusion special tokens."""
     return PreTrainedTokenizerFast(

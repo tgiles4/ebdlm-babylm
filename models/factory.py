@@ -17,7 +17,7 @@ def modernbert_config_from_cfg(
     tokenizer: PreTrainedTokenizerFast,
 ) -> ModernBertConfig:
     """Map shared Hydra fields + model profile + live tokenizer IDs to config."""
-    return ModernBertConfig(
+    config = ModernBertConfig(
         vocab_size=int(cfg.vocab_size),
         max_position_embeddings=int(cfg.context_length),
         num_hidden_layers=int(cfg.model.num_hidden_layers),
@@ -31,6 +31,7 @@ def modernbert_config_from_cfg(
         cls_token_id=None,
         sep_token_id=None,
     )
+    return config
 
 
 def _attn_implementation() -> str:

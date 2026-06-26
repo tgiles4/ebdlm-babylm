@@ -19,5 +19,6 @@ tokenizers/
 pretokenized/
 data/
 outputs/
+checkpoints/
 overlong_lines.txt
 *.log

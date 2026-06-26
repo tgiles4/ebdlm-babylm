@@ -1,8 +1,12 @@
+from pathlib import Path
+
 import lightning as L
 import torch
 import torch.nn.functional as F
 from omegaconf import DictConfig, OmegaConf
 from transformers import ModernBertForMaskedLM, get_scheduler
+
+from utils import get_tokenizer
 
 
 class LLaDAPretrainModule(L.LightningModule):
@@ -31,6 +35,24 @@ class LLaDAPretrainModule(L.LightningModule):
         self.num_warmup_steps = int(
             OmegaConf.select(cfg, "trainer.num_warmup_steps", default=1000)
         )
+        if not hasattr(model.config, "words_seen"):
+            model.config.words_seen = 0
+
+    def save_hf(self, hf_dir: Path) -> None:
+        """Write model and tokenizer in HuggingFace save_pretrained layout."""
+        hf_dir.mkdir(parents=True, exist_ok=True)
+        self.model.save_pretrained(hf_dir)
+        get_tokenizer(Path(self.cfg.paths.tokenizer)).save_pretrained(hf_dir)
+
+    def _add_words_seen(self, word_count: torch.Tensor) -> int:
+        """Increment model.config.words_seen by the global batch word count."""
+        delta = word_count.sum().to(dtype=torch.long, device=self.device)
+        if self.trainer.world_size > 1:
+            torch.distributed.all_reduce(delta, op=torch.distributed.ReduceOp.SUM)
+        self.model.config.words_seen = int(self.model.config.words_seen) + int(
+            delta.item()
+        )
+        return int(self.model.config.words_seen)
 
     def _diffusion_loss(
         self, input_ids: torch.Tensor
@@ -87,7 +109,7 @@ class LLaDAPretrainModule(L.LightningModule):
         """
         Forward one batch, log scalars, and return the loss for backprop.
 
-        Expects batch["input_ids"] from the pretokenized dataloader.
+        Expects batch["input_ids"] and batch["word_count"] from the dataloader.
         """
         input_ids = batch["input_ids"]
         loss, mask_fraction = self._diffusion_loss(input_ids)
@@ -105,6 +127,14 @@ class LLaDAPretrainModule(L.LightningModule):
             on_step=True,
             on_epoch=True,
             sync_dist=True,
+        )
+        words_seen = self._add_words_seen(batch["word_count"])
+        self.log(
+            "words_seen",
+            float(words_seen),
+            on_step=True,
+            on_epoch=False,
+            sync_dist=False,
         )
         return loss
 

@@ -24,16 +24,11 @@ class BabyLMTrain(L.LightningDataModule):
         self._train_dataset = None
 
     def setup(self, stage: str | None = None) -> None:
-        """Load the pretokenized dataset from ``cfg.paths.pretokenized``."""
+        """Load the pretokenized dataset from cfg.paths.pretokenized."""
         dataset = load_from_disk(str(self.pretokenized_path))
-
-        columns = ["input_ids"]
-        if "word_count" in dataset.column_names:
-            columns.append("word_count")
-
         self._train_dataset = dataset.with_format(
             type="torch",
-            columns=columns,
+            columns=["input_ids", "word_count"],
         )
 
     def train_dataloader(self) -> DataLoader:

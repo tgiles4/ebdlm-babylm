@@ -1,6 +1,8 @@
 defaults:
   - dataset: strict
   - model: base
+  - trainer: default
+  - samples: default
   - _self_
 
 hydra:
@@ -18,6 +20,8 @@ paths:
   packed: ${root}/data/${dataset.slug}/packed
   pretokenized: ${root}/pretokenized/${dataset.slug}
   tokenizer: ${root}/tokenizers/tokenizer_${dataset.slug}.json
+  checkpoints: ${root}/checkpoints/${dataset.slug}
+  hf_export: ${root}/checkpoints/${dataset.slug}/hf
 
 num_workers: 16
 batch_size: 1000
