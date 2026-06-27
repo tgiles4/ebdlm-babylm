@@ -14,9 +14,11 @@ __pycache__/
 docs/
 
 # Project artifacts
+wandb/
 tokenizers/
 pretokenized/
 data/
 outputs/
+checkpoints/
 overlong_lines.txt
 *.log

@@ -1,7 +1,5 @@
 """Build randomly initialized ModernBERT masked-LM models from Hydra config."""
 
-from __future__ import annotations
-
 import logging
 
 from omegaconf import DictConfig
@@ -19,7 +17,7 @@ def modernbert_config_from_cfg(
     tokenizer: PreTrainedTokenizerFast,
 ) -> ModernBertConfig:
     """Map shared Hydra fields + model profile + live tokenizer IDs to config."""
-    return ModernBertConfig(
+    config = ModernBertConfig(
         vocab_size=int(cfg.vocab_size),
         max_position_embeddings=int(cfg.context_length),
         num_hidden_layers=int(cfg.model.num_hidden_layers),
@@ -29,11 +27,27 @@ def modernbert_config_from_cfg(
         pad_token_id=int(tokenizer.pad_token_id),
         bos_token_id=int(tokenizer.bos_token_id),
         eos_token_id=int(tokenizer.eos_token_id),
+        mask_token_id=int(tokenizer.mask_token_id),
+        cls_token_id=None,
+        sep_token_id=None,
     )
+    return config
+
+
+def _attn_implementation() -> str:
+    """Use Flash Attention 2 when installed; otherwise SDPA."""
+    try:
+        import flash_attn  # noqa: F401
+    except ImportError:
+        return "sdpa"
+    return "flash_attention_2"
 
 
 def create_model(config: ModernBertConfig) -> ModernBertForMaskedLM:
     """Randomly initialize ``ModernBertForMaskedLM`` from config."""
+    attn = _attn_implementation()
+    logger.info("Using attention implementation: %s", attn)
+    config.attn_implementation = attn
     model = ModernBertForMaskedLM(config)
     param_count = model.num_parameters()
     logger.info(

@@ -1,0 +1,5 @@
+# @package logging
+enabled: true
+project: ebdlm-babylm
+entity: null   # override via CLI: logging.entity=your-entity
+log_every_n_steps: 100
