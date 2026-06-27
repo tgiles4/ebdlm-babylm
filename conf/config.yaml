@@ -3,6 +3,7 @@ defaults:
   - model: base
   - trainer: default
   - samples: default
+  - logging: wandb
   - _self_
 
 hydra:

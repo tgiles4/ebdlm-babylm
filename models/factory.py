@@ -47,7 +47,8 @@ def create_model(config: ModernBertConfig) -> ModernBertForMaskedLM:
     """Randomly initialize ``ModernBertForMaskedLM`` from config."""
     attn = _attn_implementation()
     logger.info("Using attention implementation: %s", attn)
-    model = ModernBertForMaskedLM(config, attn_implementation=attn)
+    config.attn_implementation = attn
+    model = ModernBertForMaskedLM(config)
     param_count = model.num_parameters()
     logger.info(
         "Initialized ModernBertForMaskedLM with %s parameters", f"{param_count:,}"
