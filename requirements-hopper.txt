@@ -1,20 +1,17 @@
-# Hopper venv (module load cuda/12.4.0 python/3.11.7-cx). Not uv — see pyproject.toml for local Windows.
+# Hopper Python deps (PyPI). Full env: sbatch scripts/setup_hopper_env.slurm
 #
-# PyTorch 2.6.0 → 2.7.0: keep in sync with pyproject.toml torch pin.
-#
-#   python -m venv "$SCRATCH/ebdlm/venv"
-#   source "$SCRATCH/ebdlm/venv/bin/activate"
+# Manual install (after loading modules — do NOT load ohpc):
+#   module load hosts/hopper gnu12/12.3.0 cuda/12.6.2-ou python/3.11.7-cx
+#   pip install torch==2.7.0 \
+#     --index-url https://download.pytorch.org/whl/cu126 \
+#     --extra-index-url https://pypi.org/simple
 #   pip install -r requirements-hopper.txt
+#   FLASH_ATTENTION_FORCE_BUILD=TRUE pip install flash-attn==2.8.3 --no-build-isolation
 
---extra-index-url https://download.pytorch.org/whl/cu124
-
-torch==2.7.0
+fsspec>=2023.1.0,<=2026.4.0
 transformers>=4.48.0
 tokenizers>=0.21.0
 datasets>=5.0.0
 hydra-core>=1.3.3
 lightning>=2.4
 wandb>=0.18
-
-# Official prebuilt wheel (cu12 × torch 2.7, cp311, cxx11 abi TRUE — matches PyTorch cu124 linux wheels).
-https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.7cxx11abiTRUE-cp311-cp311-linux_x86_64.whl

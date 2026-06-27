@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 
 # Dev tooling
+.venv/
 .pytest_cache/
 .ruff_cache/
 
@@ -14,6 +15,7 @@ __pycache__/
 docs/
 
 # Project artifacts
+lightning_logs/
 wandb/
 tokenizers/
 pretokenized/
