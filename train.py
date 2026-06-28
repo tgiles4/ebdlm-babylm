@@ -6,6 +6,7 @@ from pathlib import Path
 import hydra
 import lightning as L
 from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch.plugins.environments import LightningEnvironment
 from omegaconf import DictConfig, OmegaConf
 
 from models.factory import create_model_from_cfg
@@ -39,11 +40,17 @@ def main(cfg: DictConfig) -> None:
         )
 
     hardware = resolve_trainer_hardware()
+    plugins = (
+        LightningEnvironment()
+        if hardware.get("plugins") == "lightning_environment"
+        else None
+    )
     logger.info(
-        "Trainer hardware: accelerator=%s devices=%s strategy=%s",
+        "Trainer hardware: accelerator=%s devices=%s strategy=%s plugins=%s",
         hardware["accelerator"],
         hardware["devices"],
         hardware["strategy"],
+        "LightningEnvironment" if plugins is not None else "default",
     )
 
     limit_train_batches = OmegaConf.select(cfg, "trainer.limit_train_batches", default=None)
@@ -52,6 +59,7 @@ def main(cfg: DictConfig) -> None:
         accelerator=str(hardware["accelerator"]),
         devices=hardware["devices"],
         strategy=str(hardware["strategy"]),
+        plugins=plugins,
         max_epochs=int(cfg.trainer.max_epochs),
         accumulate_grad_batches=int(cfg.trainer.accumulate_grad_batches),
         gradient_clip_val=float(cfg.trainer.gradient_clip_val),

@@ -2,7 +2,7 @@
 # BabyLM Strict LLaDA pretraining (4× A100 80GB, Lightning DDP).
 # Prerequisite: pretokenized/strict/, tokenizers/tokenizer_strict.json (prepare_pretrain_data.slurm),
 # and .venv (setup_hopper_env.slurm).
-# Lightning auto-selects DDP when SLURM allocates multiple GPUs.
+# One SLURM task with --gres=gpu:4; Lightning spawns DDP locally (see trainer_runtime.py).
 # Submit from repo root: sbatch scripts/train_pretrain.slurm
 #SBATCH --job-name=ebdlm-pretrain
 #SBATCH --qos=gpu
@@ -44,5 +44,4 @@ fi
 export TOKENIZERS_PARALLELISM=false
 
 # Defaults: dataset=strict, model=base, trainer.max_epochs=10, logging=wandb.
-# srun: Lightning Slurm integration (DDP + W&B on rank 0).
 srun --export=ALL "${PYTHON}" -u train.py
