@@ -3,13 +3,15 @@
 # Assumes 4-GPU DDP (scripts/train_pretrain.slurm).
 #
 # Global token batch = per_device_batch_size × accumulate_grad_batches × num_gpus × context_length
-#   16 × 4 × 4 × 512 = 131,072 tokens/step (GPT-BERT Strict baseline batch size).
+#   64 × 1 × 4 × 512 = 131,072 tokens/step (GPT-BERT Strict baseline batch size).
+# Larger microbatches (64 vs 16) keep the same token budget but feed A100 kernels better.
+# dataloader_num_workers: 4 per rank → 16 workers total on 32 Slurm CPUs (avoid oversubscription).
 # ~12,330 optimizer steps over 10 epochs at that throughput.
 
 max_epochs: 10
 
-per_device_batch_size: 16
-accumulate_grad_batches: 4
+per_device_batch_size: 64
+accumulate_grad_batches: 1
 
 learning_rate: 2.0e-4
 weight_decay: 0.1
@@ -22,4 +24,4 @@ gradient_clip_val: 2.0
 precision: bf16-mixed
 
 checkpoint_every_n_steps: 2500
-dataloader_num_workers: 8
+dataloader_num_workers: 4

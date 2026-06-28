@@ -36,11 +36,14 @@ class BabyLMTrain(L.LightningDataModule):
         if self._train_dataset is None:
             raise RuntimeError("Call setup() before train_dataloader().")
 
-        return DataLoader(
-            self._train_dataset,
-            batch_size=self.batch_size,
-            shuffle=True,
-            num_workers=self.num_workers,
-            pin_memory=True,
-            persistent_workers=self.num_workers > 0,
-        )
+        loader_kwargs: dict[str, object] = {
+            "batch_size": self.batch_size,
+            "shuffle": True,
+            "num_workers": self.num_workers,
+            "pin_memory": True,
+            "persistent_workers": self.num_workers > 0,
+        }
+        if self.num_workers > 0:
+            loader_kwargs["prefetch_factor"] = 2
+
+        return DataLoader(self._train_dataset, **loader_kwargs)

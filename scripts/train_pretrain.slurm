@@ -42,6 +42,9 @@ if [ -f "${HOME}/.wandb_api_key" ]; then
 fi
 
 export TOKENIZERS_PARALLELISM=false
+# One thread per process; DDP ranks + dataloader workers share 32 Slurm CPUs.
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
 
 # Defaults: dataset=strict, model=base, trainer.max_epochs=10, logging=wandb.
 srun --export=ALL "${PYTHON}" -u train.py
