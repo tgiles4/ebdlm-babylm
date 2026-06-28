@@ -19,7 +19,6 @@ def unconditional_generate(
     num_steps: int,
     remasking: RemaskingStrategy = "low_confidence",
     batch_size: int = 1,
-    greedy: bool = True,
 ) -> torch.Tensor:
     """Generate text from an all-mask sequence via reverse masked diffusion.
 
@@ -43,8 +42,6 @@ def unconditional_generate(
         num_steps: Number of reverse-diffusion steps N.
         remasking: "random" or "low_confidence".
         batch_size: Number of independent samples to generate in parallel.
-        greedy: If True, take argmax at masked positions; otherwise multinomial
-            sample (reference inference default).
 
     Returns:
         Generated token ids [batch_size, seq_len]. Decode with
@@ -60,7 +57,7 @@ def unconditional_generate(
     times = torch.linspace(1, 0, num_steps + 1, device=device)
     for t, s in zip(times[:-1], times[1:], strict=True):
         logits = model(input_ids=input_ids, attention_mask=attention_mask).logits
-        input_ids = _fill_masked_positions(input_ids, mask, logits, greedy=greedy)
+        input_ids = _fill_masked_positions(input_ids, mask, logits)
         input_ids, mask = _remask(
             input_ids=input_ids,
             mask=mask,
@@ -78,14 +75,8 @@ def _fill_masked_positions(
     input_ids: torch.Tensor,
     mask: torch.Tensor,
     logits: torch.Tensor,
-    *,
-    greedy: bool,
 ) -> torch.Tensor:
-    """Write predicted tokens at positions where mask is True."""
-    if greedy:
-        predicted = logits.argmax(dim=-1)
-        return torch.where(mask, predicted, input_ids)
-
+    """Sample predicted tokens at masked positions from the softmax."""
     probs = F.softmax(logits[mask], dim=-1)
     filled = input_ids.clone()
     filled[mask] = torch.multinomial(probs, num_samples=1).squeeze(-1)
