@@ -5,7 +5,7 @@
 # Global token batch = per_device_batch_size × accumulate_grad_batches × num_gpus × context_length
 #   128 × 1 × 2 × 512 = 131,072 tokens/step (GPT-BERT Strict baseline batch size).
 # 2× A100 80GB: larger microbatches (~40–45 GB/GPU) vs 4× GPU at ~26% VRAM each.
-# dataloader_num_workers: 4 per rank → 8 workers total on 16 Slurm CPUs.
+# dataloader_num_workers: 0 avoids DDP + HF datasets worker hangs on Hopper.
 # ~12,330 optimizer steps over 10 epochs at that throughput.
 
 max_epochs: 10
@@ -24,4 +24,4 @@ gradient_clip_val: 2.0
 precision: bf16-mixed
 
 checkpoint_every_n_steps: 2500
-dataloader_num_workers: 4
+dataloader_num_workers: 0
