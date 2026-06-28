@@ -1,13 +1,13 @@
 #!/bin/bash
-# BabyLM Strict LLaDA pretraining (4× A100 80GB, Lightning DDP).
+# BabyLM Strict LLaDA pretraining (2× A100 80GB, Lightning DDP).
 # Prerequisite: pretokenized/strict/, tokenizers/tokenizer_strict.json (prepare_pretrain_data.slurm),
 # and .venv (setup_hopper_env.slurm).
-# One SLURM task with --gres=gpu:4; Lightning spawns DDP locally (see trainer_runtime.py).
+# One SLURM task with --gres=gpu:2; Lightning spawns DDP locally (see trainer_runtime.py).
 # Submit from repo root: sbatch scripts/train_pretrain.slurm
 #SBATCH --job-name=ebdlm-pretrain
 #SBATCH --qos=gpu
 #SBATCH --partition=contrib-gpuq
-#SBATCH --gres=gpu:A100.80gb:4
+#SBATCH --gres=gpu:A100.80gb:2
 
 #SBATCH --output=ebdlm-pretrain-%j.out
 #SBATCH --error=ebdlm-pretrain-%j.err
@@ -16,7 +16,7 @@
 
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=32
+#SBATCH --cpus-per-task=16
 
 #SBATCH --mem=128G
 #SBATCH --time=3-00:00:00
@@ -42,7 +42,7 @@ if [ -f "${HOME}/.wandb_api_key" ]; then
 fi
 
 export TOKENIZERS_PARALLELISM=false
-# One thread per process; DDP ranks + dataloader workers share 32 Slurm CPUs.
+# One thread per process; DDP ranks + dataloader workers share 16 Slurm CPUs.
 export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 

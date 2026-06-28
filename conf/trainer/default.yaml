@@ -1,16 +1,16 @@
 # @package trainer
 # BabyLM Strict track — LLaDA masked diffusion, ModernBERT base (~120M).
-# Assumes 4-GPU DDP (scripts/train_pretrain.slurm).
+# Assumes 2-GPU DDP (scripts/train_pretrain.slurm).
 #
 # Global token batch = per_device_batch_size × accumulate_grad_batches × num_gpus × context_length
-#   64 × 1 × 4 × 512 = 131,072 tokens/step (GPT-BERT Strict baseline batch size).
-# Larger microbatches (64 vs 16) keep the same token budget but feed A100 kernels better.
-# dataloader_num_workers: 4 per rank → 16 workers total on 32 Slurm CPUs (avoid oversubscription).
+#   128 × 1 × 2 × 512 = 131,072 tokens/step (GPT-BERT Strict baseline batch size).
+# 2× A100 80GB: larger microbatches (~40–45 GB/GPU) vs 4× GPU at ~26% VRAM each.
+# dataloader_num_workers: 4 per rank → 8 workers total on 16 Slurm CPUs.
 # ~12,330 optimizer steps over 10 epochs at that throughput.
 
 max_epochs: 10
 
-per_device_batch_size: 64
+per_device_batch_size: 128
 accumulate_grad_batches: 1
 
 learning_rate: 2.0e-4
