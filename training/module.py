@@ -55,51 +55,42 @@ class LLaDAPretrainModule(L.LightningModule):
         return int(self.model.config.words_seen)
 
     def _diffusion_loss(
-        self, input_ids: torch.Tensor
+        self, input_ids: torch.Tensor, *, mask_eps: float = 1e-3
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
-        Run one forward-noising step and compute the LLaDA pre-training loss.
+        Run one forward-noising step and compute the LLaDA pretraining loss.
 
-        1. Sample t ~ U(0, 1] per sequence (broadcast across length) and
-           clamp below 1e-5 so the 1/t divisor stays finite.
-        2. Draw an independent Bernoulli mask per token with probability t.
-        3. Build x_t by replacing masked positions with mask_token_id.
-        4. Forward through the bidirectional encoder; logits at position i
-           predict the token x_0^i
-        5. Cross entropy zeroed on unmasked positions
+        Follows the LLaDA pretraining procedure: sample a masking rate t uniformly
+        per sequence, set p_mask = (1 - epsilon) * t + epsilon, mask tokens
+        independently with probability p_mask, predict clean tokens at masked
+        positions, and weight cross-entropy by 1 / p_mask. The loss is summed
+        over masked positions and normalized by batch size times sequence length.
 
         Args:
             input_ids: Clean token ids x_0, shape [B, L].
+            mask_eps: Minimum per-token mask probability in the LLaDA forward process.
 
         Returns:
             Scalar mean loss and the batch mean mask fraction (fraction of
-            positions replaced by M), useful as a training health metric.
+            positions replaced by the mask token), useful as a training metric.
         """
         batch_size, seq_len = input_ids.shape
         device = input_ids.device
         attention_mask = torch.ones(batch_size, seq_len, dtype=torch.long, device=device)
-        t = (
-            torch.rand(batch_size, 1, device=device)
-            .expand(batch_size, seq_len)
-            .clamp_min(1e-5)
-        )
 
-        mask = torch.bernoulli(t).bool()
+        t = torch.rand(batch_size, device=device)
+        p_mask = (mask_eps + (1.0 - mask_eps) * t).unsqueeze(1).expand(batch_size, seq_len)
+
+        mask = torch.rand(batch_size, seq_len, device=device) < p_mask
         masked_ids = input_ids.masked_fill(mask, self.mask_token_id)
-        labels = input_ids.masked_fill(~mask, -100)
         logits = self.model(
             input_ids=masked_ids, attention_mask=attention_mask
         ).logits
 
-        num_classes = logits.shape[-1]
-        per_token_loss = F.cross_entropy(
-            logits.reshape(batch_size * seq_len, num_classes),
-            labels.flatten(),
-            reduction="none",
-        )
-
-        loss = per_token_loss.reshape(batch_size, seq_len) / t
-        loss = loss.mean()
+        token_loss = F.cross_entropy(
+            logits[mask], input_ids[mask], reduction="none"
+        ) / p_mask[mask]
+        loss = token_loss.sum() / (batch_size * seq_len)
         mask_fraction = mask.float().mean()
         return loss, mask_fraction
 

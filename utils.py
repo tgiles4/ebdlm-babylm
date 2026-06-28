@@ -15,8 +15,6 @@ class BabyLMSize(StrEnum):
 def count_whitespace_words(text: str) -> int:
     """Return BabyLM whitespace-separated word count (repeated exposures count)."""
     text = text.strip()
-    if not text:
-        return 0
     return len(text.split())
 
 
