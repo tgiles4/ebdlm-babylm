@@ -22,20 +22,21 @@
 #SBATCH --time=3-00:00:00
 
 # Prerequisite: repo at ${SCRATCH}/ebdlm-babylm, venv via setup_hopper_env.slurm.
+set -euo pipefail
+
 export SCRATCH="${SCRATCH:-/scratch/$(id -un)}"
 REPO="${SCRATCH}/ebdlm-babylm"
+export TMPDIR="${SCRATCH}/tmp"
+mkdir -p "${TMPDIR}"
+
 cd "${REPO}"
 
 # Load modules (match setup_hopper_env.slurm; do not load ohpc).
-module load hosts/hopper
-module load gnu12/12.3.0
-module load cuda/12.6.2-ou
-module load python/3.11.7-cx
+module load hosts/hopper gnu12/12.3.0 cuda/12.6.2-ou python/3.11.7-cx
 
 PYTHON="${REPO}/.venv/bin/python"
 
-# W&B: load API key from a file (avoids putting secrets in the script or sbatch env).
-# Create once: echo "YOUR_WANDB_API_KEY" > ~/.wandb_api_key && chmod 600 ~/.wandb_api_key
+# W&B: --export=NONE clears the submit env; load key from file (not a wandb default path).
 if [ -f "${HOME}/.wandb_api_key" ]; then
   export WANDB_API_KEY="$(cat "${HOME}/.wandb_api_key")"
 fi
@@ -43,4 +44,5 @@ fi
 export TOKENIZERS_PARALLELISM=false
 
 # Defaults: dataset=strict, model=base, trainer.max_epochs=10, logging=wandb.
-"${PYTHON}" -u train.py
+# srun: Lightning Slurm integration (DDP + W&B on rank 0).
+srun --export=ALL "${PYTHON}" -u train.py

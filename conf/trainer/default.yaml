@@ -1,12 +1,25 @@
 # @package trainer
+# BabyLM Strict track — LLaDA masked diffusion, ModernBERT base (~120M).
+# Assumes 4-GPU DDP (scripts/train_pretrain.slurm).
+#
+# Global token batch = per_device_batch_size × accumulate_grad_batches × num_gpus × context_length
+#   16 × 4 × 4 × 512 = 131,072 tokens/step (GPT-BERT Strict baseline batch size).
+# ~12,330 optimizer steps over 10 epochs at that throughput.
+
 max_epochs: 10
-accumulate_grad_batches: 1
+
 per_device_batch_size: 16
-gradient_clip_val: 1.0
-precision: bf16-mixed
-checkpoint_every_n_steps: 2500
-dataloader_num_workers: 4
-learning_rate: 5.0e-5
-weight_decay: 0.01
+accumulate_grad_batches: 4
+
+learning_rate: 2.0e-4
+weight_decay: 0.1
+
 lr_scheduler_type: cosine
-num_warmup_steps: 1000
+# 1.6% warmup (BabyLM GPT-BERT convention; ~197 steps at ~12.3k total).
+num_warmup_steps: 197
+
+gradient_clip_val: 2.0
+precision: bf16-mixed
+
+checkpoint_every_n_steps: 2500
+dataloader_num_workers: 8
