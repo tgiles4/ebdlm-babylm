@@ -75,6 +75,14 @@ class LLaDAPretrainModule(L.LightningModule):
             Scalar mean loss and the batch mean mask fraction (fraction of
             positions replaced by M), useful as a training health metric.
         """
+        if torch.rand(1, device=input_ids.device) < 0.01:
+            random_length = int(
+                torch.randint(
+                    1, input_ids.shape[1] + 1, (1,), device=input_ids.device
+                ).item()
+            )
+            input_ids = input_ids[:, :random_length]
+
         batch_size, seq_len = input_ids.shape
         device = input_ids.device
         attention_mask = torch.ones(batch_size, seq_len, dtype=torch.long, device=device)
