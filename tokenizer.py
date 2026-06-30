@@ -2,7 +2,11 @@ from pathlib import Path
 
 import hydra
 from omegaconf import DictConfig
-from tokenizers import Tokenizer, processors
+from tokenizers import (
+    Tokenizer,
+    normalizers,
+    processors,
+)
 from tokenizers.decoders import ByteLevel as ByteLevelDecoder
 from tokenizers.models import BPE
 from tokenizers.pre_tokenizers import ByteLevel
@@ -41,6 +45,8 @@ def train_tokenizer(
     ]
 
     tokenizer = Tokenizer(BPE(unk_token="<unk>"))
+
+    tokenizer.normalizer = normalizers.NFKC()
     tokenizer.pre_tokenizer = ByteLevel(add_prefix_space=False, use_regex=True)
     tokenizer.decoder = ByteLevelDecoder(add_prefix_space=False)
 
