@@ -1,5 +1,5 @@
 #!/bin/bash
-# Download BabyLM Strict, prep, pack, and pretokenize for EBDLM pretraining.
+# Download BabyLM Strict and pretokenize by document for EBDLM pretraining.
 # CPU-only; uses .venv in repo on scratch (not uv). ~22 min on a Core Ultra 7 (8 workers); 48 CPUs on Hopper.
 # Keep walltime tight for scheduler backfill — bump only if HF download + tokenizer train on a cold start.
 # Output: pretokenized/strict/ (HF dataset on disk, input_ids @ 512); tokenizers/tokenizer_strict.json if missing.
@@ -31,5 +31,5 @@ export RAYON_RS_NUM_THREADS="${NUM_WORKERS}"
 # Pretokenize uses datasets.map(num_proc=...); avoid per-worker thread oversubscription.
 export TOKENIZERS_PARALLELISM=false
 
-"${PYTHON}" -u prepare_pretrain_data.py \
-  num_workers="${NUM_WORKERS}"
+"${PYTHON}" -u pretokenize_by_document.py \
+  pretokenize.num_workers="${NUM_WORKERS}"

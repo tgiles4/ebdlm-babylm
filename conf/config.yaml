@@ -17,15 +17,14 @@ vocab_size: 16384
 
 paths:
   raw: ${root}/data/${dataset.slug}/raw
-  prepped: ${root}/data/${dataset.slug}/prepped
-  packed: ${root}/data/${dataset.slug}/packed
   pretokenized: ${root}/pretokenized/${dataset.slug}
   tokenizer: ${root}/tokenizers/tokenizer_${dataset.slug}.json
   checkpoints: ${root}/checkpoints/${dataset.slug}
   hf_export: ${root}/checkpoints/${dataset.slug}/hf
 
-num_workers: 16
-batch_size: 1000
+pretokenize:
+  num_workers: 16
+  batch_size: 1000
 
 tokenizer:
   min_frequency: 2
