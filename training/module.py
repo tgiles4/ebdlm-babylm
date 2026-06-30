@@ -37,21 +37,6 @@ class LLaDAPretrainModule(L.LightningModule):
         )
         if not hasattr(model.config, "words_seen"):
             model.config.words_seen = 0
-        self.random_length_fraction = float(
-            OmegaConf.select(cfg, "trainer.random_length_fraction", default=0.01)
-        )
-
-    def _maybe_random_length_crop(self, input_ids: torch.Tensor) -> torch.Tensor:
-        """Truncate to a uniform random prefix length on ~1% of steps (LLaDA pretrain)."""
-        if self.random_length_fraction <= 0:
-            return input_ids
-        if torch.rand(1, device=input_ids.device) >= self.random_length_fraction:
-            return input_ids
-        seq_len = input_ids.shape[1]
-        random_length = int(
-            torch.randint(1, seq_len + 1, (1,), device=input_ids.device).item()
-        )
-        return input_ids[:, :random_length]
 
     def save_hf(self, hf_dir: Path) -> None:
         """Write model and tokenizer in HuggingFace save_pretrained layout."""
@@ -90,6 +75,14 @@ class LLaDAPretrainModule(L.LightningModule):
             Scalar mean loss and the batch mean mask fraction (fraction of
             positions replaced by M), useful as a training health metric.
         """
+        if torch.rand(1, device=input_ids.device) < 0.01:
+            random_length = int(
+                torch.randint(
+                    1, input_ids.shape[1] + 1, (1,), device=input_ids.device
+                ).item()
+            )
+            input_ids = input_ids[:, :random_length]
+
         batch_size, seq_len = input_ids.shape
         device = input_ids.device
         attention_mask = torch.ones(batch_size, seq_len, dtype=torch.long, device=device)
@@ -127,7 +120,6 @@ class LLaDAPretrainModule(L.LightningModule):
         Expects batch["input_ids"] and batch["word_count"] from the dataloader.
         """
         input_ids = batch["input_ids"]
-        input_ids = self._maybe_random_length_crop(input_ids)
         loss, mask_fraction = self._diffusion_loss(input_ids)
         self.log(
             "train_loss",
