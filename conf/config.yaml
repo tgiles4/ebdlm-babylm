@@ -27,4 +27,4 @@ pretokenize:
   batch_size: 1000
 
 tokenizer:
-  min_frequency: 2
+  min_frequency: 10
