@@ -1,5 +1,6 @@
 """Lightning callbacks for epoch checkpoints and HuggingFace export."""
 
+import logging
 from pathlib import Path
 from typing import cast
 
@@ -11,6 +12,8 @@ from transformers import PretrainedConfig
 from training.generation import RemaskingStrategy, unconditional_generate
 from training.module import LLaDAPretrainModule
 from utils import BabyLMSize, get_tokenizer
+
+log = logging.getLogger(__name__)
 
 
 def words_seen_from_config(config: PretrainedConfig) -> int:
@@ -74,10 +77,11 @@ class HFSaveCallback(L.Callback):
         self, trainer: L.Trainer, pl_module: LLaDAPretrainModule
     ) -> None:
         """Mirror epoch-based ModelCheckpoint saves with an HF directory."""
-        if not trainer.is_global_zero:
-            return
+        if trainer.is_global_zero:
+            pl_module.save_hf(self._hf_dir / f"epoch-{trainer.current_epoch}")
 
-        pl_module.save_hf(self._hf_dir / f"epoch-{trainer.current_epoch}")
+        if trainer.world_size > 1:
+            trainer.strategy.barrier()
 
     def on_train_end(self, trainer: L.Trainer, pl_module: LLaDAPretrainModule) -> None:
         """Write a last/ HF export when training finishes."""
@@ -105,44 +109,69 @@ class SampleGenerationCallback(L.Callback):
             str(OmegaConf.select(cfg, "samples.remasking", default="low_confidence")),
         )
         self._num_log = int(OmegaConf.select(cfg, "samples.num_log", default=4))
+        self._max_log_chars = int(
+            OmegaConf.select(cfg, "samples.max_log_chars", default=2048)
+        )
         self._tokenizer_path = Path(cfg.paths.tokenizer)
+
+    @staticmethod
+    def _truncate_for_log(text: str, max_chars: int) -> str:
+        """Cap sample length for W&B tables; full-length 512-token rows blow up artifacts."""
+        if len(text) <= max_chars:
+            return text
+        return text[: max_chars - 3] + "..."
 
     def on_train_epoch_end(
         self, trainer: L.Trainer, pl_module: LLaDAPretrainModule
     ) -> None:
-        """Generate fixed-length samples and log a WandB table on rank 0."""
-        if not self._enabled or not trainer.is_global_zero:
+        """Generate samples on rank 0 and log a W&B table; sync all ranks under DDP."""
+        if not self._enabled:
             return
 
         if (trainer.current_epoch + 1) % self._every_n_epochs != 0:
             return
 
-        logger = trainer.logger
-        if logger is None or not hasattr(logger, "log_table"):
-            return
+        if trainer.world_size > 1:
+            trainer.strategy.barrier()
 
-        tokenizer = get_tokenizer(self._tokenizer_path)
-        was_training = pl_module.training
-        pl_module.eval()
-        try:
-            ids = unconditional_generate(
-                pl_module.model,
-                seq_len=self._seq_len,
-                mask_token_id=pl_module.mask_token_id,
-                num_steps=self._num_steps,
-                remasking=self._remasking,
-                batch_size=self._batch_size,
-            )
-            texts = tokenizer.batch_decode(ids, skip_special_tokens=True)
-        finally:
-            if was_training:
-                pl_module.train()
+        if trainer.is_global_zero:
+            wandb_logger = trainer.logger
+            if wandb_logger is not None and hasattr(wandb_logger, "log_table"):
+                tokenizer = get_tokenizer(self._tokenizer_path)
+                was_training = pl_module.training
+                pl_module.eval()
+                try:
+                    ids = unconditional_generate(
+                        pl_module.model,
+                        seq_len=self._seq_len,
+                        mask_token_id=pl_module.mask_token_id,
+                        num_steps=self._num_steps,
+                        remasking=self._remasking,
+                        batch_size=self._batch_size,
+                    )
+                    texts = tokenizer.batch_decode(ids, skip_special_tokens=True)
+                finally:
+                    if was_training:
+                        pl_module.train()
 
-        logger.log_table(
-            key=f"samples/epoch{trainer.current_epoch}",
-            columns=["Generated Samples"],
-            data=[[text] for text in texts[: self._num_log]],
-        )
+                rows = [
+                    [self._truncate_for_log(text, self._max_log_chars)]
+                    for text in texts[: self._num_log]
+                ]
+                try:
+                    wandb_logger.log_table(
+                        key=f"samples/epoch{trainer.current_epoch}",
+                        columns=["Generated Samples"],
+                        data=rows,
+                        step=trainer.global_step,
+                    )
+                except Exception:
+                    log.exception(
+                        "Failed to log samples for epoch %s", trainer.current_epoch
+                    )
+
+        if trainer.world_size > 1:
+            trainer.strategy.barrier()
 
 
 def build_checkpoint_callbacks(cfg: DictConfig) -> list[L.Callback]:

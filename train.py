@@ -13,6 +13,7 @@ from models.factory import create_model_from_cfg
 from training.callbacks import build_checkpoint_callbacks
 from training.data import BabyLMTrain
 from training.module import LLaDAPretrainModule
+from training.run_dir import allocate_run_paths
 from training.trainer_runtime import resolve_trainer_hardware
 from utils import get_tokenizer
 
@@ -22,6 +23,8 @@ logger = logging.getLogger(__name__)
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     """Train a randomly initialized ModernBERT diffusion LM on pretokenized BabyLM."""
+    allocate_run_paths(cfg)
+
     tokenizer = get_tokenizer(Path(cfg.paths.tokenizer))
     model = create_model_from_cfg(cfg, tokenizer)
     module = LLaDAPretrainModule(
@@ -36,6 +39,7 @@ def main(cfg: DictConfig) -> None:
         wandb_logger = WandbLogger(
             project=str(cfg.logging.project),
             entity=cfg.logging.entity,
+            name=str(cfg.run.name),
             config=OmegaConf.to_container(cfg, resolve=True),
         )
 
