@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import torch
-from transformers import AutoTokenizer, ModernBertForMaskedLM
+from transformers import AutoTokenizer
 
-from training.generation import generate
+from models.ebdlm import LLaDAMDLM
 
 PROMPTS = [
     "*MOT:\twhat is that?",
@@ -26,13 +26,10 @@ def _run_prompted(model_dir: Path, out_lines: list[str]) -> None:
     out_lines.append(f"device={device}")
 
     tokenizer = AutoTokenizer.from_pretrained(model_dir)
-    model = ModernBertForMaskedLM.from_pretrained(
-        model_dir, attn_implementation="sdpa"
-    )
+    model = LLaDAMDLM.from_pretrained(model_dir, attn_implementation="sdpa")
     model.eval().to(device)
 
-    mask_token_id = int(model.config.mask_token_id)
-    seq_len = 512
+    seq_len = int(model.config.max_position_embeddings)
     steps = 64
 
     for prompt_text in PROMPTS:
@@ -46,10 +43,7 @@ def _run_prompted(model_dir: Path, out_lines: list[str]) -> None:
             f"remasking=low_confidence, seq_len={seq_len}, steps={steps}"
         )
 
-        ids = generate(
-            model,
-            seq_len=seq_len,
-            mask_token_id=mask_token_id,
+        ids = model.generate(
             num_steps=steps,
             remasking="low_confidence",
             batch_size=1,

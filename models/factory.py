@@ -1,13 +1,11 @@
-"""Build randomly initialized ModernBERT masked-LM models from Hydra config."""
+"""Build randomly initialized LLaDA ModernBERT models from Hydra config."""
 
 import logging
 
 from omegaconf import DictConfig
-from transformers import (
-    ModernBertConfig,
-    ModernBertForMaskedLM,
-    PreTrainedTokenizerFast,
-)
+from transformers import ModernBertConfig, PreTrainedTokenizerFast
+
+from models.ebdlm import LLaDAMDLM
 
 logger = logging.getLogger(__name__)
 
@@ -43,23 +41,24 @@ def _attn_implementation() -> str:
     return "flash_attention_2"
 
 
-def create_model(config: ModernBertConfig) -> ModernBertForMaskedLM:
-    """Randomly initialize ``ModernBertForMaskedLM`` from config."""
+def create_model(config: ModernBertConfig) -> LLaDAMDLM:
+    """Randomly initialize ``LLaDAMDLM`` from config."""
     attn = _attn_implementation()
     logger.info("Using attention implementation: %s", attn)
     config.attn_implementation = attn
-    model = ModernBertForMaskedLM(config)
+    config.architectures = ["LLaDAMDLM"]
+    if not hasattr(config, "words_seen") or config.words_seen is None:
+        config.words_seen = 0
+    model = LLaDAMDLM(config)
     param_count = model.num_parameters()
-    logger.info(
-        "Initialized ModernBertForMaskedLM with %s parameters", f"{param_count:,}"
-    )
+    logger.info("Initialized LLaDAMDLM with %s parameters", f"{param_count:,}")
     return model
 
 
 def create_model_from_cfg(
     cfg: DictConfig,
     tokenizer: PreTrainedTokenizerFast,
-) -> ModernBertForMaskedLM:
+) -> LLaDAMDLM:
     """Build config from Hydra + tokenizer, then randomly initialize the model."""
     config = modernbert_config_from_cfg(cfg, tokenizer)
     return create_model(config)

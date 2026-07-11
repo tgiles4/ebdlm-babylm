@@ -9,7 +9,7 @@ from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from omegaconf import DictConfig, OmegaConf
 from transformers import PretrainedConfig
 
-from training.generation import RemaskingStrategy, unconditional_generate
+from models.ebdlm import RemaskingStrategy
 from training.module import LLaDAPretrainModule
 from utils import BabyLMSize, get_tokenizer
 
@@ -100,9 +100,6 @@ class SampleGenerationCallback(L.Callback):
             OmegaConf.select(cfg, "samples.every_n_epochs", default=1)
         )
         self._batch_size = int(OmegaConf.select(cfg, "samples.batch_size", default=4))
-        self._seq_len = int(
-            OmegaConf.select(cfg, "samples.seq_len", default=cfg.context_length)
-        )
         self._num_steps = int(OmegaConf.select(cfg, "samples.num_steps", default=64))
         self._remasking = cast(
             RemaskingStrategy,
@@ -141,10 +138,7 @@ class SampleGenerationCallback(L.Callback):
                 was_training = pl_module.training
                 pl_module.eval()
                 try:
-                    ids = unconditional_generate(
-                        pl_module.model,
-                        seq_len=self._seq_len,
-                        mask_token_id=pl_module.mask_token_id,
+                    ids = pl_module.model.generate(
                         num_steps=self._num_steps,
                         remasking=self._remasking,
                         batch_size=self._batch_size,

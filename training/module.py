@@ -2,10 +2,10 @@ from pathlib import Path
 
 import lightning as L
 import torch
-import torch.nn.functional as F
 from omegaconf import DictConfig, OmegaConf
-from transformers import ModernBertForMaskedLM, get_scheduler
+from transformers import get_scheduler
 
+from models.ebdlm import LLaDAMDLM
 from utils import get_tokenizer
 
 
@@ -13,9 +13,10 @@ class LLaDAPretrainModule(L.LightningModule):
     """
     Lightning wrapper for LLaDA masked discrete diffusion pre-training.
     """
+
     def __init__(
         self,
-        model: ModernBertForMaskedLM,
+        model: LLaDAMDLM,
         mask_token_id: int,
         cfg: DictConfig,
     ) -> None:
@@ -54,54 +55,6 @@ class LLaDAPretrainModule(L.LightningModule):
         )
         return int(self.model.config.words_seen)
 
-    def _diffusion_loss(
-        self, input_ids: torch.Tensor, *, mask_eps: float = 1e-3
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """
-        Run one forward-noising step and compute the LLaDA pretraining loss.
-
-        Follows the LLaDA pretraining procedure: sample a masking rate t uniformly
-        per sequence, set p_mask = (1 - epsilon) * t + epsilon, mask tokens
-        independently with probability p_mask, predict clean tokens at masked
-        positions, and weight cross-entropy by 1 / p_mask. The loss is summed
-        over masked positions and normalized by batch size times sequence length.
-
-        Args:
-            input_ids: Clean token ids x_0, shape [B, L].
-            mask_eps: Minimum per-token mask probability in the LLaDA forward process.
-
-        Returns:
-            Scalar mean loss and the batch mean mask fraction (fraction of
-            positions replaced by the mask token), useful as a training metric.
-        """
-        if torch.rand(1, device=input_ids.device) < 0.01:
-            random_length = int(
-                torch.randint(
-                    1, input_ids.shape[1] + 1, (1,), device=input_ids.device
-                ).item()
-            )
-            input_ids = input_ids[:, :random_length]
-
-        batch_size, seq_len = input_ids.shape
-        device = input_ids.device
-        attention_mask = torch.ones(batch_size, seq_len, dtype=torch.long, device=device)
-
-        t = torch.rand(batch_size, device=device)
-        p_mask = (mask_eps + (1.0 - mask_eps) * t).unsqueeze(1).expand(batch_size, seq_len)
-
-        mask = torch.rand(batch_size, seq_len, device=device) < p_mask
-        masked_ids = input_ids.masked_fill(mask, self.mask_token_id)
-        logits = self.model(
-            input_ids=masked_ids, attention_mask=attention_mask
-        ).logits
-
-        token_loss = F.cross_entropy(
-            logits[mask], input_ids[mask], reduction="none"
-        ) / p_mask[mask]
-        loss = token_loss.sum() / (batch_size * seq_len)
-        mask_fraction = mask.float().mean()
-        return loss, mask_fraction
-
     def training_step(
         self, batch: dict[str, torch.Tensor], batch_idx: int
     ) -> torch.Tensor:
@@ -111,7 +64,7 @@ class LLaDAPretrainModule(L.LightningModule):
         Expects batch["input_ids"] and batch["word_count"] from the dataloader.
         """
         input_ids = batch["input_ids"]
-        loss, mask_fraction = self._diffusion_loss(input_ids)
+        loss, mask_fraction = self.model.diffusion_loss(input_ids)
         self.log(
             "train_loss",
             loss,
