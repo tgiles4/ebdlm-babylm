@@ -30,7 +30,7 @@ def _git_sha_short(root: Path) -> str | None:
 
 
 def _default_run_name(root: Path, dataset_slug: str) -> str:
-    """Build a filesystem-safe run folder name without extra user config."""
+    """Build a filesystem-safe run folder name when W&B is not inventing one."""
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H%M%S")
     parts = [stamp, dataset_slug]
     sha = _git_sha_short(root)
@@ -41,6 +41,9 @@ def _default_run_name(root: Path, dataset_slug: str) -> str:
 
 def allocate_run_paths(cfg: DictConfig) -> Path:
     """Pick a run folder, wire checkpoint paths into cfg, and save the resolved config.
+
+    Prefer ``cfg.run.name`` when set (including a W&B-generated name from
+    ``train.py``). Otherwise fall back to timestamp + dataset slug + git SHA.
 
     Layout:
         runs/{run_name}/checkpoints/   — Lightning .ckpt files
