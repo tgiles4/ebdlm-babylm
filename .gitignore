@@ -22,5 +22,6 @@ pretokenized/
 data/
 outputs/
 checkpoints/
+runs/
 overlong_lines.txt
 *.log
