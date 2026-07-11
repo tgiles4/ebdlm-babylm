@@ -15,12 +15,19 @@ root: ${hydra:runtime.cwd}
 context_length: 512
 vocab_size: 16384
 
+# Optional label for this training job. When null and W&B logging is enabled,
+# train.py uses the W&B-generated run name (e.g. curious-sunset-42) for both
+# the W&B run and runs/{name}/. Otherwise: timestamp + dataset slug + git SHA.
+run:
+  name: null
+
 paths:
   raw: ${root}/data/${dataset.slug}/raw
   pretokenized: ${root}/pretokenized/${dataset.slug}
   tokenizer: ${root}/tokenizers/tokenizer_${dataset.slug}.json
-  checkpoints: ${root}/checkpoints/${dataset.slug}
-  hf_export: ${root}/checkpoints/${dataset.slug}/hf
+  # Set at train startup by training.run_dir.allocate_run_paths.
+  checkpoints: null
+  hf_export: null
 
 pretokenize:
   num_workers: 16

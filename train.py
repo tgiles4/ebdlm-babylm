@@ -13,15 +13,54 @@ from models.factory import create_model_from_cfg
 from training.callbacks import build_checkpoint_callbacks
 from training.data import BabyLMTrain
 from training.module import LLaDAPretrainModule
+from training.run_dir import allocate_run_paths
 from training.trainer_runtime import resolve_trainer_hardware
 from utils import get_tokenizer
 
 logger = logging.getLogger(__name__)
 
 
+def _configured_run_name(cfg: DictConfig) -> str | None:
+    """Return an explicit run.name override, or None to let W&B / timestamp invent one."""
+    run_name = OmegaConf.select(cfg, "run.name", default=None)
+    if run_name is None or str(run_name).strip() == "":
+        return None
+    return str(run_name).strip()
+
+
+def _build_wandb_logger(cfg: DictConfig, *, name: str | None) -> WandbLogger:
+    """Create a WandbLogger; name=None lets W&B invent curious-sunset-42 style ids."""
+    entity = OmegaConf.select(cfg, "logging.entity", default=None)
+    return WandbLogger(
+        project=str(cfg.logging.project),
+        entity=None if entity is None else str(entity),
+        name=name,
+    )
+
+
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     """Train a randomly initialized ModernBERT diffusion LM on pretokenized BabyLM."""
+    wandb_logger: WandbLogger | None = None
+    explicit_name = _configured_run_name(cfg)
+    if OmegaConf.select(cfg, "logging.enabled", default=False):
+        # Init W&B before allocate_run_paths so a generated name can become the folder.
+        wandb_logger = _build_wandb_logger(cfg, name=explicit_name)
+        if explicit_name is None:
+            generated = wandb_logger.experiment.name
+            if not generated:
+                raise RuntimeError("W&B did not return a run name after init.")
+            OmegaConf.set_struct(cfg, False)
+            cfg.run.name = str(generated)
+
+    allocate_run_paths(cfg)
+
+    if wandb_logger is not None:
+        wandb_logger.experiment.config.update(
+            OmegaConf.to_container(cfg, resolve=True),
+            allow_val_change=True,
+        )
+
     tokenizer = get_tokenizer(Path(cfg.paths.tokenizer))
     model = create_model_from_cfg(cfg, tokenizer)
     module = LLaDAPretrainModule(
@@ -30,14 +69,6 @@ def main(cfg: DictConfig) -> None:
         cfg=cfg,
     )
     datamodule = BabyLMTrain(cfg)
-
-    wandb_logger: WandbLogger | None = None
-    if OmegaConf.select(cfg, "logging.enabled", default=False):
-        wandb_logger = WandbLogger(
-            project=str(cfg.logging.project),
-            entity=cfg.logging.entity,
-            config=OmegaConf.to_container(cfg, resolve=True),
-        )
 
     hardware = resolve_trainer_hardware()
     plugins = (
