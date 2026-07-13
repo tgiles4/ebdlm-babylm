@@ -3,6 +3,7 @@ defaults:
   - model: base
   - trainer: default
   - samples: default
+  - energy: default
   - logging: wandb
   - _self_
 
@@ -15,6 +16,9 @@ root: ${hydra:runtime.cwd}
 context_length: 512
 vocab_size: 16384
 
+# False: train LLaDAMDLM (diffusion). True: train EDLM energy head (NCE).
+train_energy: false
+
 # Optional label for this training job. When null and W&B logging is enabled,
 # train.py uses the W&B-generated run name (e.g. curious-sunset-42) for both
 # the W&B run and runs/{name}/. Otherwise: timestamp + dataset slug + git SHA.
@@ -25,6 +29,8 @@ paths:
   raw: ${root}/data/${dataset.slug}/raw
   pretokenized: ${root}/pretokenized/${dataset.slug}
   tokenizer: ${root}/tokenizers/tokenizer_${dataset.slug}.json
+  # Required when train_energy=true: HF dir of a trained LLaDAMDLM.
+  llada_checkpoint: null
   # Set at train startup by training.run_dir.allocate_run_paths.
   checkpoints: null
   hf_export: null

@@ -64,7 +64,7 @@ class LLaDAPretrainModule(L.LightningModule):
         Expects batch["input_ids"] and batch["word_count"] from the dataloader.
         """
         input_ids = batch["input_ids"]
-        loss, mask_fraction = self.model.diffusion_loss(input_ids)
+        loss, mask_fraction = self.model.loss(input_ids)
         self.log(
             "train_loss",
             loss,

@@ -1,11 +1,12 @@
-"""Build randomly initialized LLaDA ModernBERT models from Hydra config."""
+"""Build LLaDA / EDLM ModernBERT models from Hydra config."""
 
 import logging
+from pathlib import Path
 
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from transformers import ModernBertConfig, PreTrainedTokenizerFast
 
-from models.ebdlm import LLaDAMDLM
+from models.ebdlm import EDLM, LLaDAMDLM
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,19 @@ def modernbert_config_from_cfg(
         cls_token_id=None,
         sep_token_id=None,
     )
+    _apply_energy_config(config, cfg)
     return config
+
+
+def _apply_energy_config(config: ModernBertConfig, cfg: DictConfig) -> None:
+    """Copy Hydra energy knobs onto a ModernBertConfig when present."""
+    energy = cfg.get("energy")
+    if energy is None:
+        return
+    config.is_size = int(energy.is_size)
+    config.is_temp = float(energy.is_temp)
+    config.is_start = float(energy.is_start)
+    config.is_stop = float(energy.is_stop)
 
 
 def _attn_implementation() -> str:
@@ -42,7 +55,7 @@ def _attn_implementation() -> str:
 
 
 def create_model(config: ModernBertConfig) -> LLaDAMDLM:
-    """Randomly initialize ``LLaDAMDLM`` from config."""
+    """Randomly initialize LLaDAMDLM from config."""
     attn = _attn_implementation()
     logger.info("Using attention implementation: %s", attn)
     config.attn_implementation = attn
@@ -59,6 +72,29 @@ def create_model_from_cfg(
     cfg: DictConfig,
     tokenizer: PreTrainedTokenizerFast,
 ) -> LLaDAMDLM:
-    """Build config from Hydra + tokenizer, then randomly initialize the model."""
+    """Build LLaDAMDLM from config, or EDLM from paths.llada_checkpoint."""
+    train_energy = bool(OmegaConf.select(cfg, "train_energy", default=False))
+    if train_energy:
+        ckpt = OmegaConf.select(cfg, "paths.llada_checkpoint", default=None)
+        if ckpt is None or str(ckpt).strip() == "":
+            raise ValueError(
+                "train_energy=true requires paths.llada_checkpoint "
+                "(HF directory of a trained LLaDAMDLM)"
+            )
+        ckpt_path = Path(str(ckpt))
+        attn = _attn_implementation()
+        logger.info(
+            "Loading LLaDAMDLM from %s (attn=%s) for EDLM", ckpt_path, attn
+        )
+        llada = LLaDAMDLM.from_pretrained(
+            ckpt_path, attn_implementation=attn
+        )
+        _apply_energy_config(llada.config, cfg)
+        model = EDLM(llada)
+        logger.info(
+            "Initialized EDLM with %s parameters", f"{model.num_parameters():,}"
+        )
+        return model
+
     config = modernbert_config_from_cfg(cfg, tokenizer)
     return create_model(config)

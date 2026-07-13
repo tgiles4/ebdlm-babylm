@@ -1,0 +1,7 @@
+# @package energy
+# Importance-sampling knobs for EDLM (stored on model.config).
+is_size: 3
+is_temp: 1.0
+# Run IS only while is_stop <= t <= is_start (t goes 1 → 0 in generate).
+is_start: 1.0
+is_stop: 0.0
