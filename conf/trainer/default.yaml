@@ -1,6 +1,6 @@
 # @package trainer
 # BabyLM Strict track — LLaDA masked diffusion, ModernBERT base (~120M).
-# Assumes 2-GPU DDP (scripts/train_pretrain.slurm).
+# Assumes 2-GPU DDP (scripts/train_diffusion.slurm).
 #
 # Global token batch = per_device_batch_size × accumulate_grad_batches × num_gpus × context_length
 #   128 × 1 × 2 × 512 = 131,072 tokens/step (GPT-BERT Strict baseline batch size).

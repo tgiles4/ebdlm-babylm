@@ -3,14 +3,14 @@
 # Prerequisite: pretokenized/strict/, tokenizers/tokenizer_strict.json (prepare_pretrain_data.slurm),
 # and .venv (setup_hopper_env.slurm).
 # One SLURM task with --gres=gpu:2; Lightning spawns DDP locally (see trainer_runtime.py).
-# Submit from repo root: sbatch scripts/train_pretrain.slurm
-#SBATCH --job-name=ebdlm-pretrain
+# Submit from repo root: sbatch scripts/train_diffusion.slurm
+#SBATCH --job-name=ebdlm-diffusion
 #SBATCH --qos=gpu
 #SBATCH --partition=contrib-gpuq
 #SBATCH --gres=gpu:A100.80gb:2
 
-#SBATCH --output=ebdlm-pretrain-%j.out
-#SBATCH --error=ebdlm-pretrain-%j.err
+#SBATCH --output=ebdlm-diffusion-%j.out
+#SBATCH --error=ebdlm-diffusion-%j.err
 #SBATCH --export=NONE
 #SBATCH --constraint=amd
 

@@ -1,15 +1,14 @@
 #!/bin/bash
 # BabyLM Strict EDLM energy-head training (NCE) on a frozen LLaDAMDLM.
-# Prerequisite: trained LLaDA HF export, pretokenized/strict/, tokenizer,
-# and .venv (setup_hopper_env.slurm).
+# Prerequisite: trained LLaDA HF export under runs/<run>/hf/, pretokenized/strict/,
+# tokenizer, and .venv (setup_hopper_env.slurm).
 # One SLURM task with --gres=gpu:2; Lightning spawns DDP locally (see trainer_runtime.py).
 #
-# BabyLM Strict word budget is 1000M total across LLaDA + energy. Load a
-# mid-run chck_*M with budget remaining (e.g. chck_700M); do not load chck_1000M.
+# BabyLM Strict word budget is 1000M total across LLaDA + energy. Leave
+# headroom (e.g. chck_700M); do not use chck_1000M.
 #
 # Submit from repo root:
-#   LLADA_CHECKPOINT=/scratch/$USER/ebdlm-babylm/runs/<run>/hf/chck_700M \
-#     sbatch --export=ALL,LLADA_CHECKPOINT scripts/train_energy.slurm
+#   sbatch scripts/train_energy.slurm 2026-06-28_213248_strict chck_700M
 #
 #SBATCH --job-name=ebdlm-energy
 #SBATCH --qos=gpu
@@ -38,16 +37,17 @@ mkdir -p "${TMPDIR}"
 
 cd "${REPO}"
 
-if [ -z "${LLADA_CHECKPOINT:-}" ]; then
-  echo "LLADA_CHECKPOINT is required (HF directory of a trained LLaDAMDLM)." >&2
-  echo "Example:" >&2
-  echo "  LLADA_CHECKPOINT=${REPO}/runs/<run>/hf/chck_700M \\" >&2
-  echo "    sbatch --export=ALL,LLADA_CHECKPOINT scripts/train_energy.slurm" >&2
-  echo "(Strict budget is 1000M words total; leave headroom for energy NCE.)" >&2
+if [ "$#" -ne 2 ]; then
+  echo "Usage: sbatch scripts/train_energy.slurm <run_name> <chck_name>" >&2
+  echo "Example: sbatch scripts/train_energy.slurm 2026-06-28_213248_strict chck_700M" >&2
   exit 1
 fi
+
+LLADA_RUN="$1"
+CHCK="$2"
+LLADA_CHECKPOINT="${REPO}/runs/${LLADA_RUN}/hf/${CHCK}"
 if [ ! -d "${LLADA_CHECKPOINT}" ]; then
-  echo "LLADA_CHECKPOINT is not a directory: ${LLADA_CHECKPOINT}" >&2
+  echo "Missing LLaDA HF export: ${LLADA_CHECKPOINT}" >&2
   exit 1
 fi
 
