@@ -7,6 +7,7 @@ import hydra
 import lightning as L
 from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.plugins.environments import LightningEnvironment
+from lightning.pytorch.utilities.rank_zero import rank_zero_only
 from omegaconf import DictConfig, OmegaConf
 
 from models.factory import create_model_from_cfg
@@ -45,8 +46,9 @@ def main(cfg: DictConfig) -> None:
     explicit_name = _configured_run_name(cfg)
     if OmegaConf.select(cfg, "logging.enabled", default=False):
         # Init W&B before allocate_run_paths so a generated name can become the folder.
+        # Rank > 0 gets DummyExperiment; never touch .experiment there (DDP re-exec).
         wandb_logger = _build_wandb_logger(cfg, name=explicit_name)
-        if explicit_name is None:
+        if explicit_name is None and rank_zero_only.rank == 0:
             generated = wandb_logger.experiment.name
             if not generated:
                 raise RuntimeError("W&B did not return a run name after init.")
@@ -56,10 +58,8 @@ def main(cfg: DictConfig) -> None:
     allocate_run_paths(cfg)
 
     if wandb_logger is not None:
-        wandb_logger.experiment.config.update(
-            OmegaConf.to_container(cfg, resolve=True),
-            allow_val_change=True,
-        )
+        # rank_zero_only inside WandbLogger; DummyExperiment.config is a nop function.
+        wandb_logger.log_hyperparams(OmegaConf.to_container(cfg, resolve=True))
 
     tokenizer = get_tokenizer(Path(cfg.paths.tokenizer))
     model = create_model_from_cfg(cfg, tokenizer)
