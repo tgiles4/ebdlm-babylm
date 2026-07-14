@@ -19,7 +19,8 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.8",
 ]
-# Platform markers pick the right flash-attn source; both groups are safe with `uv sync --all-groups`.
+# Platform markers pick the right flash-attn wheel; both groups are safe with `uv sync --all-groups`.
+# Linux wheel is cp311 + cxx11abiTRUE (matches torch 2.7.0+cu126); use Python 3.11 on RunPod/Hopper.
 hopper = [
     "flash-attn==2.8.3; sys_platform == 'linux'",
 ]
@@ -29,10 +30,10 @@ windows = [
 
 [tool.uv]
 package = false
-# Hopper builds flash-attn from source (see scripts/setup_hopper_env.slurm for CUDA arch env).
+# Kept for fallback if a platform lacks a wheel URL and must build from sdist.
 no-build-isolation-package = ["flash-attn"]
 
-# Windows: cu128 + prebuilt flash-attn wheel. Hopper Linux: cu126 + flash-attn source build.
+# Windows: cu128 + prebuilt flash-attn. Linux: cu126 + Dao-AILab prebuilt (cxx11abiTRUE; cp311).
 [[tool.uv.index]]
 name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
@@ -50,6 +51,7 @@ torch = [
 ]
 flash-attn = [
     { url = "https://github.com/kingbri1/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu128torch2.7.0cxx11abiFALSE-cp311-cp311-win_amd64.whl", marker = "sys_platform == 'win32'" },
+    { url = "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.7cxx11abiTRUE-cp311-cp311-linux_x86_64.whl", marker = "sys_platform == 'linux'" },
 ]
 
 [tool.pytest.ini_options]
