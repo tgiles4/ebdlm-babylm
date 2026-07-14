@@ -10,15 +10,14 @@
 
 max_epochs: 10
 
-per_device_batch_size: 128
-accumulate_grad_batches: 1
+per_device_batch_size: 192
+accumulate_grad_batches: 2
 
-learning_rate: 0.007
+learning_rate: 0.003
 weight_decay: 0.1
 
 lr_scheduler_type: cosine
-# 1.6% warmup (BabyLM GPT-BERT convention; ~197 steps at ~12.3k total).
-num_warmup_steps: 197
+num_warmup_steps: 200
 
 gradient_clip_val: 2.0
 precision: bf16-mixed
