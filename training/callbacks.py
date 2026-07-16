@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import cast
 
 import lightning as L
+import torch
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from omegaconf import DictConfig, OmegaConf
 from transformers import PretrainedConfig
@@ -138,11 +139,18 @@ class SampleGenerationCallback(L.Callback):
                 was_training = pl_module.training
                 pl_module.eval()
                 try:
-                    ids = pl_module.model.generate(
-                        num_steps=self._num_steps,
-                        remasking=self._remasking,
-                        batch_size=self._batch_size,
-                    )
+                    # generate() is outside Lightning's train AMP; FA2 needs bf16/fp16.
+                    device_type = pl_module.device.type
+                    with torch.autocast(
+                        device_type=device_type,
+                        dtype=torch.bfloat16,
+                        enabled=device_type == "cuda",
+                    ):
+                        ids = pl_module.model.generate(
+                            num_steps=self._num_steps,
+                            remasking=self._remasking,
+                            batch_size=self._batch_size,
+                        )
                     texts = tokenizer.batch_decode(ids, skip_special_tokens=True)
                 finally:
                     if was_training:
