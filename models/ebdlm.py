@@ -102,11 +102,14 @@ class LLaDAMDLM(ModernBertForMaskedLM):
         return loss, mask_fraction
 
     def _fill(self, input_tokens: Tensor, mask: Tensor, logits: Tensor) -> Tensor:
-        """
-        Fill masked positions with softmax probabilities.
-        """
+        """Fill masked positions by multinomial sampling from softmax."""
         probs = F.softmax(logits[mask], dim=-1)
         input_tokens[mask] = torch.multinomial(probs, num_samples=1).squeeze(-1)
+        return input_tokens
+
+    def _fill_argmax(self, input_tokens: Tensor, mask: Tensor, logits: Tensor) -> Tensor:
+        """Fill masked positions with argmax tokens (LLaDA Algorithm 5)."""
+        input_tokens[mask] = logits[mask].argmax(dim=-1)
         return input_tokens
 
     def _remask_random(self, input_tokens: Tensor, mask: Tensor, ratio: float) -> tuple[Tensor, Tensor]:
@@ -130,16 +133,22 @@ class LLaDAMDLM(ModernBertForMaskedLM):
         input_tokens[mask] = self.config.mask_token_id
         return input_tokens, mask
     
-    def _remask_low_confidence(self, input_tokens: Tensor, mask: Tensor, logits: Tensor, ratio: float) -> tuple[Tensor, Tensor]:
+    def _remask_low_confidence(
+        self, input_tokens: Tensor, mask: Tensor, logits: Tensor
+    ) -> tuple[Tensor, Tensor]:
         """
         Low-confidence remask strategy from LLaDA Algorithm 5.
         https://arxiv.org/pdf/2502.09992
 
+        Remasks n = min(⌊L_answer · s⌋, |M|) lowest-confidence positions, where
+        L_answer is the fixed initial maskable length (self._answer_lens) and
+        |M| is the current pre-fill mask count. Non-mask positions are excluded.
+
         Args:
-            input_tokens: Tensor of shape [B, L] containing the input tokens.
-            mask: Tensor of shape [B, L] containing the mask.
+            input_tokens: Tensor of shape [B, L] containing the filled tokens.
+            mask: Tensor of shape [B, L]; True where positions were masked
+                before the fill.
             logits: Tensor of shape [B, L, V] containing the logits.
-            ratio: Float between 0 and 1 indicating the ratio of positions to remask.
 
         Returns:
             Tuple of [B, L] tensors containing the input tokens and mask.
@@ -152,14 +161,16 @@ class LLaDAMDLM(ModernBertForMaskedLM):
             dim=-1, 
             index=input_tokens.unsqueeze(-1)
         ).squeeze(-1)
-        
-        chosen_probs = chosen_probs.masked_fill(~mask, 1.0)
+
+        # Only remask among current mask slots (protect prompt / already kept).
+        chosen_probs = chosen_probs.masked_fill(~mask, float("inf"))
         new_mask = torch.zeros_like(mask)
 
         # Iterate through batch to remask the lowest-confidence tokens
         for batch_idx in range(input_tokens.shape[0]):
             num_masked = int(mask[batch_idx].sum().item())
-            num_to_remask = int(ratio * num_masked)
+            l_answer = int(self._answer_lens[batch_idx].item())
+            num_to_remask = min(int(l_answer * self._s), num_masked)
             if num_to_remask > 0:
                 lowest_idx = torch.topk(
                     chosen_probs[batch_idx], num_to_remask, largest=False
@@ -188,19 +199,19 @@ class LLaDAMDLM(ModernBertForMaskedLM):
             logits: Tensor of shape [B, L, V] containing the logits.
             attention_mask: Tensor of shape [B, L] containing the attention mask.
             remasking: String indicating the remasking strategy to use.
-            ratio: Float between 0 and 1 indicating the ratio of positions to remask.
+            ratio: Float s/t for random remasking.
 
         Returns:
             Tuple of [B, L] tensors containing the input tokens and mask.
         """
-        input_tokens = self._fill(input_tokens, mask, logits)
-
         if remasking == "random":
+            input_tokens = self._fill(input_tokens, mask, logits)
             return self._remask_random(input_tokens, mask, ratio)
-        
+
         if remasking == "low_confidence":
-            return self._remask_low_confidence(input_tokens, mask, logits, ratio)
-        
+            input_tokens = self._fill_argmax(input_tokens, mask, logits)
+            return self._remask_low_confidence(input_tokens, mask, logits)
+
         raise ValueError(f"Invalid remasking strategy: {remasking}")
 
     def generate(
@@ -245,11 +256,14 @@ class LLaDAMDLM(ModernBertForMaskedLM):
 
         # Create mask so prompt_ids are not remasked
         mask = input_tokens == self.config.mask_token_id
+        # Fixed answer length for Alg. 5: initial maskable slots (excludes prompt).
+        self._answer_lens = mask.sum(dim=-1)
 
         # Perform reverse process
         times = torch.linspace(1, 0, num_steps + 1, device=input_tokens.device).tolist()
         for t, s in zip(times[:-1], times[1:], strict=True):
             self._t = t
+            self._s = s
             ratio = s / t
             
             with torch.no_grad():
@@ -481,12 +495,12 @@ class EDLM(LLaDAMDLM):
             return self._remask_energy_gradient(
                 input_tokens, mask, logits, attention_mask, ratio
             )
-        
+
         return super()._reverse_step(
-                input_tokens,
-                mask,
-                logits,
-                attention_mask,
-                remasking,
-                ratio,
-            )
+            input_tokens,
+            mask,
+            logits,
+            attention_mask,
+            remasking,
+            ratio,
+        )
