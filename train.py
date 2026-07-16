@@ -7,6 +7,7 @@ import hydra
 import lightning as L
 from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.plugins.environments import LightningEnvironment
+from lightning.pytorch.strategies import DDPStrategy
 from lightning.pytorch.utilities.rank_zero import rank_zero_only
 from omegaconf import DictConfig, OmegaConf
 
@@ -76,11 +77,17 @@ def main(cfg: DictConfig) -> None:
         if hardware.get("plugins") == "lightning_environment"
         else None
     )
+    # EDLM freezes the backbone; DDP must allow unused params or it can stall.
+    strategy: str | DDPStrategy = str(hardware["strategy"])
+    if strategy == "ddp" and bool(
+        OmegaConf.select(cfg, "train_energy", default=False)
+    ):
+        strategy = DDPStrategy(find_unused_parameters=True)
     logger.info(
         "Trainer hardware: accelerator=%s devices=%s strategy=%s plugins=%s",
         hardware["accelerator"],
         hardware["devices"],
-        hardware["strategy"],
+        strategy,
         "LightningEnvironment" if plugins is not None else "default",
     )
 
@@ -89,7 +96,7 @@ def main(cfg: DictConfig) -> None:
     trainer = L.Trainer(
         accelerator=str(hardware["accelerator"]),
         devices=hardware["devices"],
-        strategy=str(hardware["strategy"]),
+        strategy=strategy,
         plugins=plugins,
         max_epochs=int(cfg.trainer.max_epochs),
         accumulate_grad_batches=int(cfg.trainer.accumulate_grad_batches),

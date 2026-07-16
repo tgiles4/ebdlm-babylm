@@ -93,9 +93,15 @@ class LLaDAPretrainModule(L.LightningModule):
     def configure_optimizers(self) -> dict[str, object]:
         """
         Return AdamW and a HuggingFace LR scheduler stepped every optimizer step.
+
+        Only parameters with requires_grad=True are optimized (EDLM freezes the
+        backbone and trains the energy head).
         """
+        params = [p for p in self.model.parameters() if p.requires_grad]
+        if not params:
+            raise RuntimeError("No trainable parameters for AdamW")
         optimizer = torch.optim.AdamW(
-            self.model.parameters(),
+            params,
             lr=self.learning_rate,
             weight_decay=self.weight_decay,
         )
