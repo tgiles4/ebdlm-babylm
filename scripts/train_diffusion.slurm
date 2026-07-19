@@ -3,7 +3,11 @@
 # Prerequisite: pretokenized/strict/, tokenizers/tokenizer_strict.json (prepare_pretrain_data.slurm),
 # and .venv (setup_hopper_env.slurm).
 # One SLURM task with --gres=gpu:2; Lightning spawns DDP locally (see trainer_runtime.py).
-# Submit from repo root: sbatch scripts/train_diffusion.slurm
+# Submit from repo root (Hydra overrides after the script name):
+#   sbatch -J ebdlm-thin-A scripts/train_diffusion.slurm \
+#     run.name=backbone-thin-196k model.intermediate_size=1152 \
+#     trainer.per_device_batch_size=192 trainer.accumulate_grad_batches=1 \
+#     trainer.learning_rate=0.007
 #SBATCH --job-name=ebdlm-diffusion
 #SBATCH --qos=gpu
 #SBATCH --partition=contrib-gpuq
@@ -47,4 +51,5 @@ export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 
 # Defaults: dataset=strict, model=base, trainer.max_epochs=10, logging=wandb.
-srun --export=ALL "${PYTHON}" -u train.py
+# "$@" forwards Hydra overrides from: sbatch ... scripts/train_diffusion.slurm key=val ...
+srun --export=ALL "${PYTHON}" -u train.py "$@"
