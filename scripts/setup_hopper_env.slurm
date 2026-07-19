@@ -1,5 +1,5 @@
 #!/bin/bash
-# Hopper venv via uv: torch 2.7.0+cu126 + flash-attn source build.
+# Hopper venv: torch 2.7.0+cu126 + flash-attn (cached Hopper wheel, else source build).
 # sbatch scripts/setup_hopper_env.slurm
 # Modules: hosts/hopper gnu12/12.3.0 cuda/12.6.2-ou python/3.11.7-cx  (no ohpc)
 #SBATCH --job-name=setup-ebdlm-env
@@ -23,28 +23,41 @@ REPO="${SCRATCH}/ebdlm-babylm"
 
 module load hosts/hopper gnu12/12.3.0 cuda/12.6.2-ou python/3.11.7-cx
 
-export UV_CACHE_DIR="${SCRATCH}/uv_cache"
+export PIP_CACHE_DIR="${SCRATCH}/pip_cache"
 export XDG_CACHE_HOME="${SCRATCH}/xdg_cache"
 export TMPDIR="${SCRATCH}/tmp"
-mkdir -p "${UV_CACHE_DIR}" "${XDG_CACHE_HOME}" "${TMPDIR}"
+mkdir -p "${PIP_CACHE_DIR}" "${XDG_CACHE_HOME}" "${TMPDIR}"
 
 cd "${REPO}"
+rm -rf .venv
+python -m venv .venv
+source .venv/bin/activate
 
-if ! command -v uv >/dev/null 2>&1; then
-  curl -LsSf https://astral.sh/uv/install.sh | sh
-  export PATH="${HOME}/.local/bin:${PATH}"
+pip install -U pip wheel setuptools
+pip install torch==2.7.0 \
+  --index-url https://download.pytorch.org/whl/cu126 \
+  --extra-index-url https://pypi.org/simple
+
+# Skip flash-attn lines: Dao manylinux wheels break on Hopper; install below from cache/source.
+grep -viE '^[[:space:]]*flash-attn' requirements-hopper.txt > /tmp/requirements-hopper-nofa.txt
+pip install -r /tmp/requirements-hopper-nofa.txt
+pip install ninja packaging psutil einops
+
+# Prefer the Hopper-built wheel already in pip_cache; otherwise compile.
+FLASH_WHEEL="$(find "${PIP_CACHE_DIR}" -iname 'flash_attn-*.whl' 2>/dev/null | head -n 1 || true)"
+if [[ -n "${FLASH_WHEEL}" ]]; then
+  echo "Installing flash-attn from cache: ${FLASH_WHEEL}"
+  pip install "${FLASH_WHEEL}"
+else
+  echo "No cached flash-attn wheel; building from source (slow)."
+  export FLASH_ATTN_CUDA_ARCHS="80"
+  export TORCH_CUDA_ARCH_LIST="8.0"
+  export MAX_JOBS=$(( SLURM_CPUS_PER_TASK * 3 / 4 ))
+  export FLASH_ATTENTION_FORCE_BUILD=TRUE
+  pip install flash-attn==2.8.3 --no-build-isolation --no-binary flash-attn
 fi
 
-export FLASH_ATTN_CUDA_ARCHS="80"
-export TORCH_CUDA_ARCH_LIST="8.0"
-export MAX_JOBS=$(( SLURM_CPUS_PER_TASK * 3 / 4 ))
-export FLASH_ATTENTION_FORCE_BUILD=TRUE
-export TOKENIZERS_PARALLELISM=false
-
-rm -rf .venv
-uv sync --all-groups --python 3.11
-
-"${REPO}/.venv/bin/python" -c "
+python -c "
 import torch, flash_attn
 from models.factory import _attn_implementation
 assert '+cu126' in torch.__version__
