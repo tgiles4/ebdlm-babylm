@@ -19,7 +19,7 @@
 #SBATCH --cpus-per-task=16
 
 #SBATCH --mem=128G
-#SBATCH --time=3-00:00:00
+#SBATCH --time=02:30:00
 
 # Prerequisite: repo at ${SCRATCH}/ebdlm-babylm, venv via setup_hopper_env.slurm.
 set -euo pipefail
